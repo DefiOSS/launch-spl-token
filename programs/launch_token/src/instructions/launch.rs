@@ -45,6 +45,18 @@ pub struct Launch<'info> {
         mint::freeze_authority = user
     )]
     pub mint: Account<'info, Mint>,
+    /// CHECK: This account is created in the instruction
+    #[account(
+        mut,
+        seeds = [
+            b"metadata",
+            token_metadata_program.key().as_ref(),
+            mint.key().as_ref(),
+        ],
+        bump,
+        seeds::program = token_metadata_program.key(),
+    )]
+    pub metadata: UncheckedAccount<'info>,
     #[account(
         init_if_needed,
         payer = user,
@@ -58,7 +70,7 @@ pub struct Launch<'info> {
         @LaunchTokenError::InvalidFeeAccount,
     )]
     pub fee_account: SystemAccount<'info>,
-    // pub token_metadata_program: Program<'info, Metadata>,
+    pub token_metadata_program: Program<'info, Metadata>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
@@ -75,7 +87,7 @@ pub fn launch_handler(ctx: Context<Launch>, args: LaunchArgs) -> Result<()> {
         from: ctx.accounts.user.to_account_info(),
         to: ctx.accounts.fee_account.to_account_info(),
     };
-    
+
     transfer(
         CpiContext::new(
             ctx.accounts.system_program.to_account_info(),
@@ -88,6 +100,37 @@ pub fn launch_handler(ctx: Context<Launch>, args: LaunchArgs) -> Result<()> {
     require!(args.symbol.len() <= 10, LaunchTokenError::SymbolTooLong);
     require!(args.uri.len() <= 200, LaunchTokenError::UriTooLong);
     require!(args.decimals <= 9, LaunchTokenError::InvalidDecimals);
+
+    let metadata_data = DataV2 {
+        name: args.name.clone(),
+        symbol: args.symbol.clone(),
+        uri: args.uri.clone(),
+        seller_fee_basis_points: 0,
+        creators: None,
+        collection: None,
+        uses: None,
+    };
+
+    let metadata_ctx = CpiContext::new(
+        ctx.accounts.token_metadata_program.to_account_info(),
+        CreateMetadataAccountsV3 {
+            metadata: ctx.accounts.metadata.to_account_info(),
+            mint: ctx.accounts.mint.to_account_info(),
+            mint_authority: ctx.accounts.user.to_account_info(),
+            payer: ctx.accounts.user.to_account_info(),
+            update_authority: ctx.accounts.user.to_account_info(),
+            system_program: ctx.accounts.system_program.to_account_info(),
+            rent: ctx.accounts.rent.to_account_info(),
+        },
+    );
+
+    create_metadata_accounts_v3(
+        metadata_ctx,
+        metadata_data,
+        args.make_metadata_mutable,
+        true,
+        None,
+    )?;
 
     // Revoke mint authority if requested
     if args.revoke_mint_authority {
@@ -108,31 +151,6 @@ pub fn launch_handler(ctx: Context<Launch>, args: LaunchArgs) -> Result<()> {
         let cpi_ctx = CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts);
         set_authority(cpi_ctx, AuthorityType::FreezeAccount, None)?;
     }
-
-    // let metadata_data = DataV2 {
-    //     name: args.name.clone(),
-    //     symbol: args.symbol.clone(),
-    //     uri: args.uri.clone(),
-    //     seller_fee_basis_points: 0,
-    //     creators: None,
-    //     collection: None,
-    //     uses: None,
-    // };
-
-    // let metadata_ctx = CpiContext::new(
-    //     ctx.accounts.token_metadata_program.to_account_info(),
-    //     CreateMetadataAccountsV3 {
-    //         metadata: ctx.accounts.mint.to_account_info(),
-    //         mint: ctx.accounts.mint.to_account_info(),
-    //         mint_authority: ctx.accounts.user.to_account_info(),
-    //         payer: ctx.accounts.user.to_account_info(),
-    //         update_authority: ctx.accounts.user.to_account_info(),
-    //         system_program: ctx.accounts.system_program.to_account_info(),
-    //         rent: ctx.accounts.rent.to_account_info(),
-    //     },
-    // );
-
-    // create_metadata_accounts_v3(metadata_ctx, metadata_data, args.make_metadata_mutable, true, None)?;
 
     config.tokens = config
         .tokens

@@ -1,16 +1,11 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 import { LaunchToken } from "../target/types/launch_token";
-import {
-  PublicKey,
-  Keypair,
-  LAMPORTS_PER_SOL,
-} from "@solana/web3.js";
-import {
-  getAssociatedTokenAddress,
-  getMint,
-} from "@solana/spl-token";
+import { PublicKey, Keypair, LAMPORTS_PER_SOL } from "@solana/web3.js";
+import { getAssociatedTokenAddress, getMint } from "@solana/spl-token";
 import { assert } from "chai";
+import * as fs from "fs";
+import * as path from "path";
 
 describe("launch_token", () => {
   // Configure the client to use the local cluster
@@ -21,8 +16,19 @@ describe("launch_token", () => {
   const admin = anchor.workspace.LaunchToken.provider.wallet.payer;
   const feeAccount = admin.publicKey;
   console.log("Admin pubkey:", admin.publicKey.toBase58());
-  const user = Keypair.generate();
+  const userKeyPath = path.join(__dirname, "user-keypair.json");
 
+  let user: Keypair;
+
+  if (fs.existsSync(userKeyPath)) {
+    const userKeyData = JSON.parse(fs.readFileSync(userKeyPath, "utf-8"));
+    user = Keypair.fromSecretKey(Uint8Array.from(userKeyData));
+  } else {
+    user = Keypair.generate();
+    fs.writeFileSync(userKeyPath, JSON.stringify(Array.from(user.secretKey)));
+  }
+
+  console.log("User pubkey:", user.publicKey.toBase58());
   const CONFIG_SEED = Buffer.from("config");
 
   const [configPDA, configBump] = PublicKey.findProgramAddressSync(
@@ -72,6 +78,7 @@ describe("launch_token", () => {
   });
 
   it("Launches a token", async () => {
+    const beforeConfigAccount = await program.account.config.fetch(configPDA);
     const mint = Keypair.generate();
     const tokenAccount = await getAssociatedTokenAddress(
       mint.publicKey,
@@ -102,7 +109,7 @@ describe("launch_token", () => {
     const configAccount = await program.account.config.fetch(configPDA);
     assert.equal(
       configAccount.tokens.toNumber(),
-      1,
+      beforeConfigAccount.tokens.toNumber() + 1,
       "Token count should increment"
     );
 
@@ -131,11 +138,21 @@ describe("launch_token", () => {
       makeMetadataMutable: false,
     };
 
+    const [metadataPDA] = await PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("metadata"),
+        new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s").toBuffer(),
+        mint.publicKey.toBuffer(),
+      ],
+      new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s")
+    );
+
     await program.methods
       .launchToken(launchArgs)
-      .accounts({
+      .accountsPartial({
         user: user.publicKey,
         mint: mint.publicKey,
+        metadata: metadataPDA,
         feeAccount,
       })
       .signers([user, mint])

@@ -6,7 +6,7 @@ pub mod state;
 use anchor_lang::prelude::*;
 use instructions::{initialize::*, launch::*, update_fee::*};
 
-declare_id!("8fAeJ4DieZX4DRuyxS8hy3onnNrMo8zEFUp2dJF5MwTY");
+declare_id!("AGYkNasGKotZV1A5LkvxeK7mCkMQWdCjkRo4Qi64Jcct");
 
 #[program]
 pub mod launch_token {
