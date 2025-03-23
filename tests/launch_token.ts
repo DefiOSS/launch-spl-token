@@ -4,12 +4,9 @@ import { LaunchToken } from "../target/types/launch_token";
 import {
   PublicKey,
   Keypair,
-  SystemProgram,
   LAMPORTS_PER_SOL,
 } from "@solana/web3.js";
 import {
-  TOKEN_PROGRAM_ID,
-  ASSOCIATED_TOKEN_PROGRAM_ID,
   getAssociatedTokenAddress,
   getMint,
 } from "@solana/spl-token";
