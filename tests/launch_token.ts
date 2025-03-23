@@ -1,11 +1,12 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 import { LaunchToken } from "../target/types/launch_token";
-import { PublicKey, Keypair } from "@solana/web3.js";
+import { PublicKey, Keypair, SystemProgram } from "@solana/web3.js";
 import {
   TOKEN_PROGRAM_ID,
   ASSOCIATED_TOKEN_PROGRAM_ID,
   getAssociatedTokenAddress,
+  getMint,
 } from "@solana/spl-token";
 import { assert } from "chai";
 
@@ -75,6 +76,9 @@ describe("launch_token", () => {
       symbol: "TEST",
       uri: "https://example.com/metadata.json",
       decimals: 6,
+      revokeMintAuthority: false,
+      revokeFreezeAuthority: false,
+      makeMetadataMutable: true,
     };
 
     await program.methods
@@ -101,6 +105,50 @@ describe("launch_token", () => {
     assert.isNotNull(mintAccount, "Mint account should exist");
   });
 
+  it("Launches a token with revoked authorities and immutable metadata", async () => {
+    const beforeConfigAccount = await program.account.config.fetch(configPDA);
+    const mint = Keypair.generate();
+    const tokenAccount = await getAssociatedTokenAddress(
+      mint.publicKey,
+      user.publicKey
+    );
+
+    const launchArgs = {
+      name: "Test Token",
+      symbol: "TEST",
+      uri: "https://example.com/metadata.json",
+      decimals: 6,
+      revokeMintAuthority: true,
+      revokeFreezeAuthority: true,
+      makeMetadataMutable: false,
+    };
+
+    await program.methods
+      .launchToken(launchArgs)
+      .accounts({
+        user: user.publicKey,
+        mint: mint.publicKey,
+      })
+      .signers([user, mint])
+      .rpc();
+
+    // Verify config updates
+    const configAccount = await program.account.config.fetch(configPDA);
+    assert.equal(
+      configAccount.tokens.toNumber(),
+      beforeConfigAccount.tokens.toNumber() + 1,
+      "Token count should increment"
+    );
+
+    // Verify mint account authorities
+    const mintInfo = await getMint(provider.connection, mint.publicKey);
+    assert.isNull(mintInfo.mintAuthority, "Mint authority should be revoked");
+    assert.isNull(
+      mintInfo.freezeAuthority,
+      "Freeze authority should be revoked"
+    );
+  });
+
   it("Fails to launch token with invalid parameters", async () => {
     const mint = Keypair.generate();
     const tokenAccount = await getAssociatedTokenAddress(
@@ -114,6 +162,9 @@ describe("launch_token", () => {
       symbol: "TEST",
       uri: "https://example.com/metadata.json",
       decimals: 6,
+      revokeMintAuthority: false,
+      revokeFreezeAuthority: false,
+      makeMetadataMutable: true,
     };
 
     try {
