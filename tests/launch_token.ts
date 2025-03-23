@@ -19,10 +19,8 @@ describe("launch_token", () => {
   console.log("Admin pubkey:", admin.publicKey.toBase58());
   const user = Keypair.generate();
 
-  // Constants matching your Rust code
   const CONFIG_SEED = Buffer.from("config");
 
-  // Derive config PDA
   const [configPDA, configBump] = PublicKey.findProgramAddressSync(
     [CONFIG_SEED],
     program.programId
