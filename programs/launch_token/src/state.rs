@@ -7,5 +7,6 @@ pub struct Config {
     pub admin: Pubkey,
     pub fee_account: Pubkey,
     pub tokens: u64,
+    pub fee_amount: u64,
     pub bump: u8,
 }

@@ -26,6 +26,7 @@ pub fn initialize_handler(ctx: Context<Initialize>) -> Result<()> {
     ctx.accounts.config.active = true;
     ctx.accounts.config.admin = ctx.accounts.user.key();
     ctx.accounts.config.fee_account = ctx.accounts.user.key();
+    ctx.accounts.config.fee_amount = 0;
 
     msg!("Program initialized by: {}!", ctx.accounts.user.key());
     Ok(())

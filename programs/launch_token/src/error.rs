@@ -16,4 +16,6 @@ pub enum LaunchTokenError {
     InvalidDecimals,
     #[msg("Arithmetic overflow occurred")]
     Overflow,
+    #[msg("Invalid fee account")]
+    InvalidFeeAccount,
 }

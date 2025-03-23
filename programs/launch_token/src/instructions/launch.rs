@@ -1,5 +1,8 @@
 use crate::{contants::CONFIG_SEED, error::LaunchTokenError, state::Config};
-use anchor_lang::prelude::*;
+use anchor_lang::{
+    prelude::*,
+    system_program::{transfer, Transfer},
+};
 use anchor_spl::{
     associated_token::AssociatedToken,
     metadata::{
@@ -49,6 +52,12 @@ pub struct Launch<'info> {
         associated_token::authority = user
     )]
     pub token_account: Account<'info, TokenAccount>,
+    #[account(
+        mut,
+        address = config.fee_account
+        @LaunchTokenError::InvalidFeeAccount,
+    )]
+    pub fee_account: SystemAccount<'info>,
     // pub token_metadata_program: Program<'info, Metadata>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub token_program: Program<'info, Token>,
@@ -60,6 +69,20 @@ pub fn launch_handler(ctx: Context<Launch>, args: LaunchArgs) -> Result<()> {
     let config = &mut ctx.accounts.config;
 
     require!(config.active, LaunchTokenError::ProgramNotActive);
+
+    let fee_amount = config.fee_amount;
+    let transfer_instruction = Transfer {
+        from: ctx.accounts.user.to_account_info(),
+        to: ctx.accounts.fee_account.to_account_info(),
+    };
+    
+    transfer(
+        CpiContext::new(
+            ctx.accounts.system_program.to_account_info(),
+            transfer_instruction,
+        ),
+        fee_amount,
+    )?;
 
     require!(args.name.len() <= 32, LaunchTokenError::NameTooLong);
     require!(args.symbol.len() <= 10, LaunchTokenError::SymbolTooLong);

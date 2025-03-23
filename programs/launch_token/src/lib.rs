@@ -4,7 +4,7 @@ pub mod instructions;
 pub mod state;
 
 use anchor_lang::prelude::*;
-use instructions::{initialize::*, launch::*};
+use instructions::{initialize::*, launch::*, update_fee::*};
 
 declare_id!("8fAeJ4DieZX4DRuyxS8hy3onnNrMo8zEFUp2dJF5MwTY");
 
@@ -15,6 +15,11 @@ pub mod launch_token {
 
     pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
         initialize_handler(ctx)?;
+        Ok(())
+    }
+
+    pub fn update_fee(ctx: Context<UpdateFee>, new_fee: u64) -> Result<()> {
+        update_fee_handler(ctx, new_fee)?;
         Ok(())
     }
 
