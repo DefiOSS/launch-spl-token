@@ -6,7 +6,10 @@ use anchor_spl::{
         create_metadata_accounts_v3, mpl_token_metadata::types::DataV2, CreateMetadataAccountsV3,
         Metadata,
     },
-    token::{Mint, Token, TokenAccount},
+    token::{
+        set_authority, spl_token::instruction::AuthorityType, Mint, SetAuthority, Token,
+        TokenAccount,
+    },
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Debug, Clone)]
@@ -15,6 +18,9 @@ pub struct LaunchArgs {
     pub symbol: String,
     pub uri: String,
     pub decimals: u8,
+    pub revoke_mint_authority: bool,
+    pub revoke_freeze_authority: bool,
+    pub make_metadata_mutable: bool,
 }
 
 #[derive(Accounts)]
@@ -60,6 +66,26 @@ pub fn launch_handler(ctx: Context<Launch>, args: LaunchArgs) -> Result<()> {
     require!(args.uri.len() <= 200, LaunchTokenError::UriTooLong);
     require!(args.decimals <= 9, LaunchTokenError::InvalidDecimals);
 
+    // Revoke mint authority if requested
+    if args.revoke_mint_authority {
+        let cpi_accounts = SetAuthority {
+            account_or_mint: ctx.accounts.mint.to_account_info(),
+            current_authority: ctx.accounts.user.to_account_info(),
+        };
+        let cpi_ctx = CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts);
+        set_authority(cpi_ctx, AuthorityType::MintTokens, None)?;
+    }
+
+    // Revoke freeze authority if requested
+    if args.revoke_freeze_authority {
+        let cpi_accounts = SetAuthority {
+            account_or_mint: ctx.accounts.mint.to_account_info(),
+            current_authority: ctx.accounts.user.to_account_info(),
+        };
+        let cpi_ctx = CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts);
+        set_authority(cpi_ctx, AuthorityType::FreezeAccount, None)?;
+    }
+
     // let metadata_data = DataV2 {
     //     name: args.name.clone(),
     //     symbol: args.symbol.clone(),
@@ -83,7 +109,7 @@ pub fn launch_handler(ctx: Context<Launch>, args: LaunchArgs) -> Result<()> {
     //     },
     // );
 
-    // create_metadata_accounts_v3(metadata_ctx, metadata_data, false, true, None)?;
+    // create_metadata_accounts_v3(metadata_ctx, metadata_data, args.make_metadata_mutable, true, None)?;
 
     config.tokens = config
         .tokens
