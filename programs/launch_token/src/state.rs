@@ -6,6 +6,6 @@ pub struct Config {
     pub active: bool,
     pub admin: Pubkey,
     pub fee_account: Pubkey,
-    pub tokens: u32,
+    pub tokens: u64,
     pub bump: u8,
 }
