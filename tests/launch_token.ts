@@ -1,7 +1,12 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 import { LaunchToken } from "../target/types/launch_token";
-import { PublicKey, Keypair, SystemProgram } from "@solana/web3.js";
+import {
+  PublicKey,
+  Keypair,
+  SystemProgram,
+  LAMPORTS_PER_SOL,
+} from "@solana/web3.js";
 import {
   TOKEN_PROGRAM_ID,
   ASSOCIATED_TOKEN_PROGRAM_ID,
@@ -17,6 +22,7 @@ describe("launch_token", () => {
 
   const program = anchor.workspace.LaunchToken as Program<LaunchToken>;
   const admin = anchor.workspace.LaunchToken.provider.wallet.payer;
+  const feeAccount = admin.publicKey;
   console.log("Admin pubkey:", admin.publicKey.toBase58());
   const user = Keypair.generate();
 
@@ -31,6 +37,10 @@ describe("launch_token", () => {
   async function airdrop(pubkey: PublicKey, amount: number = 2e9) {
     const signature = await provider.connection.requestAirdrop(pubkey, amount);
     await provider.connection.confirmTransaction(signature);
+  }
+
+  async function getBalance(pubkey: PublicKey): Promise<number> {
+    return await provider.connection.getBalance(pubkey);
   }
 
   before(async () => {
@@ -86,6 +96,7 @@ describe("launch_token", () => {
       .accounts({
         user: user.publicKey,
         mint: mint.publicKey,
+        feeAccount,
       })
       .signers([user, mint])
       .rpc();
@@ -128,6 +139,7 @@ describe("launch_token", () => {
       .accounts({
         user: user.publicKey,
         mint: mint.publicKey,
+        feeAccount,
       })
       .signers([user, mint])
       .rpc();
@@ -173,6 +185,7 @@ describe("launch_token", () => {
         .accounts({
           user: user.publicKey,
           mint: mint.publicKey,
+          feeAccount,
         })
         .signers([user, mint])
         .rpc();
@@ -184,5 +197,87 @@ describe("launch_token", () => {
         "Should fail with NameTooLong error"
       );
     }
+  });
+
+  it("Updates the fee amount as admin", async () => {
+    const newFee = new anchor.BN(0.2 * LAMPORTS_PER_SOL); // 0.2 SOL
+
+    await program.methods
+      .updateFee(newFee)
+      .accounts({
+        config: configPDA,
+        admin: admin.publicKey,
+      })
+      .signers([admin])
+      .rpc();
+
+    const configAccount = await program.account.config.fetch(configPDA);
+    assert.equal(
+      configAccount.feeAmount.toNumber(),
+      newFee.toNumber(),
+      "Fee amount should be updated to the new value"
+    );
+  });
+
+  it("Launches a token with the updated fee", async () => {
+    const configAccountBefore = await program.account.config.fetch(configPDA);
+    const feeAmount = configAccountBefore.feeAmount.toNumber();
+    const userBalanceBefore = await getBalance(user.publicKey);
+    const feeAccountBalanceBefore = await getBalance(
+      configAccountBefore.feeAccount
+    );
+
+    const mint = Keypair.generate();
+    const tokenAccount = await getAssociatedTokenAddress(
+      mint.publicKey,
+      user.publicKey
+    );
+
+    const launchArgs = {
+      name: "Another Token",
+      symbol: "ATK",
+      uri: "https://example.com/another.json",
+      decimals: 9,
+      revokeMintAuthority: false,
+      revokeFreezeAuthority: false,
+      makeMetadataMutable: true,
+    };
+
+    let tx;
+    try {
+      tx = await program.methods
+        .launchToken(launchArgs)
+        .accounts({
+          user: user.publicKey,
+          mint: mint.publicKey,
+          feeAccount: configAccountBefore.feeAccount,
+        })
+        .signers([user, mint])
+        .rpc();
+    } catch (error) {
+      console.error("Transaction failed:", error);
+      throw error;
+    }
+
+    const userBalanceAfter = await getBalance(user.publicKey);
+    const feeAccountBalanceAfter = await getBalance(
+      configAccountBefore.feeAccount
+    );
+
+    const expectedUserBalance = userBalanceBefore - feeAmount;
+
+    const expectedFeeAccountBalance = feeAccountBalanceBefore + feeAmount;
+    assert.isAtMost(
+      feeAccountBalanceAfter,
+      expectedFeeAccountBalance,
+      "Fee account should receive the updated fee amount or less due to transaction fee"
+    );
+
+    const configAccountAfter = await program.account.config.fetch(configPDA);
+    assert.equal(
+      configAccountAfter.tokens.toNumber(),
+      configAccountBefore.tokens.toNumber() + 1,
+      "Token count should increment"
+    );
   });
 });
