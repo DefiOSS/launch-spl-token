@@ -18,4 +18,6 @@ pub enum LaunchTokenError {
     Overflow,
     #[msg("Invalid fee account")]
     InvalidFeeAccount,
+    #[msg("Mint authority revoked")]
+    MintAuthorityRevoked,
 }

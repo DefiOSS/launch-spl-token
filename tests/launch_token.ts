@@ -93,6 +93,7 @@ describe("launch_token", () => {
       revokeMintAuthority: false,
       revokeFreezeAuthority: false,
       makeMetadataMutable: true,
+      initialMintAmount: new anchor.BN(1e9),
     };
 
     await program.methods
@@ -136,6 +137,7 @@ describe("launch_token", () => {
       revokeMintAuthority: true,
       revokeFreezeAuthority: true,
       makeMetadataMutable: false,
+      initialMintAmount: new anchor.BN(1e9),
     };
 
     const [metadataPDA] = await PublicKey.findProgramAddressSync(
@@ -191,6 +193,7 @@ describe("launch_token", () => {
       revokeMintAuthority: false,
       revokeFreezeAuthority: false,
       makeMetadataMutable: true,
+      initialMintAmount: new anchor.BN(1e9),
     };
 
     try {
@@ -255,6 +258,7 @@ describe("launch_token", () => {
       revokeMintAuthority: false,
       revokeFreezeAuthority: false,
       makeMetadataMutable: true,
+      initialMintAmount: new anchor.BN(1e9),
     };
 
     let tx;
@@ -293,5 +297,103 @@ describe("launch_token", () => {
       configAccountBefore.tokens.toNumber() + 1,
       "Token count should increment"
     );
+  });
+
+  it("Mints additional tokens successfully", async () => {
+    // Generate keys for the mint and token account
+    const mint = Keypair.generate();
+    const tokenAccount = await getAssociatedTokenAddress(mint.publicKey, user.publicKey);
+  
+    // Launch a token with mint authority intact
+    const launchArgs = {
+      name: "Mintable Token",
+      symbol: "MINT",
+      uri: "https://example.com/mint.json",
+      decimals: 6,
+      revokeMintAuthority: false,
+      revokeFreezeAuthority: false,
+      makeMetadataMutable: true,
+      initialMintAmount: new anchor.BN(0),
+    };
+  
+    await program.methods
+      .launchToken(launchArgs)
+      .accountsPartial({
+        user: user.publicKey,
+        mint: mint.publicKey,
+        feeAccount: admin.publicKey,
+      })
+      .signers([user, mint])
+      .rpc();
+  
+    // Mint additional tokens
+    const mintAmount = new anchor.BN(1000000); // 1 token with 6 decimals
+    await program.methods
+      .mintTokens(mintAmount)
+      .accounts({
+        user: user.publicKey,
+        mint: mint.publicKey,
+      })
+      .signers([user])
+      .rpc();
+  
+    // Verify the token balance
+    const tokenAccountInfo = await provider.connection.getTokenAccountBalance(tokenAccount);
+    assert.equal(tokenAccountInfo.value.uiAmount, 1, "Token balance should be 1 after minting");
+  });
+
+  it("Fails to mint tokens when mint authority is revoked", async () => {
+    // Generate keys for the mint and token account
+    const mint = Keypair.generate();
+    const tokenAccount = await getAssociatedTokenAddress(mint.publicKey, user.publicKey);
+    const [metadataPDA] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("metadata"),
+        new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s").toBuffer(),
+        mint.publicKey.toBuffer(),
+      ],
+      new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s")
+    );
+  
+    // Launch a token with revoked mint authority
+    const launchArgs = {
+      name: "Locked Token",
+      symbol: "LOCK",
+      uri: "https://example.com/lock.json",
+      decimals: 6,
+      revokeMintAuthority: true,
+      revokeFreezeAuthority: true,
+      makeMetadataMutable: false,
+      initialMintAmount: new anchor.BN(0),
+    };
+  
+    await program.methods
+      .launchToken(launchArgs)
+      .accountsPartial({
+        user: user.publicKey,
+        mint: mint.publicKey,
+        metadata: metadataPDA,
+        feeAccount: admin.publicKey,
+      })
+      .signers([user, mint])
+      .rpc();
+  
+    // Attempt to mint tokens and expect failure
+    try {
+      await program.methods
+        .mintTokens(new anchor.BN(1000000))
+        .accounts({
+          user: user.publicKey,
+          mint: mint.publicKey,
+        })
+        .signers([user])
+        .rpc();
+      assert.fail("Should have failed to mint tokens due to revoked authority");
+    } catch (error) {
+      assert.ok(
+        error.message.includes("Invalid authority") || error.message.includes("MintAuthorityRevoked"),
+        "Expected an error related to revoked mint authority"
+      );
+    }
   });
 });

@@ -10,8 +10,8 @@ use anchor_spl::{
         Metadata,
     },
     token::{
-        set_authority, spl_token::instruction::AuthorityType, Mint, SetAuthority, Token,
-        TokenAccount,
+        mint_to, set_authority, spl_token::instruction::AuthorityType, Mint, MintTo, SetAuthority,
+        Token, TokenAccount,
     },
 };
 
@@ -24,6 +24,7 @@ pub struct LaunchArgs {
     pub revoke_mint_authority: bool,
     pub revoke_freeze_authority: bool,
     pub make_metadata_mutable: bool,
+    pub initial_mint_amount: u64,
 }
 
 #[derive(Accounts)]
@@ -131,6 +132,18 @@ pub fn launch_handler(ctx: Context<Launch>, args: LaunchArgs) -> Result<()> {
         true,
         None,
     )?;
+
+    // Mint initial tokens to the user's token account
+    let mint_to_cpi_accounts = MintTo {
+        mint: ctx.accounts.mint.to_account_info(),
+        to: ctx.accounts.token_account.to_account_info(),
+        authority: ctx.accounts.user.to_account_info(),
+    };
+    let mint_to_cpi_ctx = CpiContext::new(
+        ctx.accounts.token_program.to_account_info(),
+        mint_to_cpi_accounts,
+    );
+    mint_to(mint_to_cpi_ctx, args.initial_mint_amount)?;
 
     // Revoke mint authority if requested
     if args.revoke_mint_authority {

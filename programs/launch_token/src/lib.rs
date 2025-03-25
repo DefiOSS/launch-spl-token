@@ -4,7 +4,7 @@ pub mod instructions;
 pub mod state;
 
 use anchor_lang::prelude::*;
-use instructions::{initialize::*, launch::*, update_fee::*};
+use instructions::{initialize::*, launch::*, update_fee::*, mint_tokens::*};
 
 declare_id!("AGYkNasGKotZV1A5LkvxeK7mCkMQWdCjkRo4Qi64Jcct");
 
@@ -25,6 +25,11 @@ pub mod launch_token {
 
     pub fn launch_token(ctx: Context<Launch>, args: LaunchArgs) -> Result<()> {
         launch_handler(ctx, args)?;
+        Ok(())
+    }
+
+    pub fn mint_tokens(ctx: Context<MintTokens>, amount: u64) -> Result<()> {
+        mint_tokens_handler(ctx, amount)?;
         Ok(())
     }
 }
