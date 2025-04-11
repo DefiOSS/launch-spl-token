@@ -299,11 +299,34 @@ describe("launch_token", () => {
     );
   });
 
+  it("Updates the fee amount as admin to zero again", async () => {
+    const newFee = new anchor.BN(0);
+
+    await program.methods
+      .updateFee(newFee)
+      .accounts({
+        config: configPDA,
+        admin: admin.publicKey,
+      })
+      .signers([admin])
+      .rpc();
+
+    const configAccount = await program.account.config.fetch(configPDA);
+    assert.equal(
+      configAccount.feeAmount.toNumber(),
+      newFee.toNumber(),
+      "Fee amount should be updated to the new value"
+    );
+  });
+
   it("Mints additional tokens successfully", async () => {
     // Generate keys for the mint and token account
     const mint = Keypair.generate();
-    const tokenAccount = await getAssociatedTokenAddress(mint.publicKey, user.publicKey);
-  
+    const tokenAccount = await getAssociatedTokenAddress(
+      mint.publicKey,
+      user.publicKey
+    );
+
     // Launch a token with mint authority intact
     const launchArgs = {
       name: "Mintable Token",
@@ -315,7 +338,7 @@ describe("launch_token", () => {
       makeMetadataMutable: true,
       initialMintAmount: new anchor.BN(0),
     };
-  
+
     await program.methods
       .launchToken(launchArgs)
       .accountsPartial({
@@ -325,7 +348,7 @@ describe("launch_token", () => {
       })
       .signers([user, mint])
       .rpc();
-  
+
     // Mint additional tokens
     const mintAmount = new anchor.BN(1000000); // 1 token with 6 decimals
     await program.methods
@@ -336,16 +359,25 @@ describe("launch_token", () => {
       })
       .signers([user])
       .rpc();
-  
+
     // Verify the token balance
-    const tokenAccountInfo = await provider.connection.getTokenAccountBalance(tokenAccount);
-    assert.equal(tokenAccountInfo.value.uiAmount, 1, "Token balance should be 1 after minting");
+    const tokenAccountInfo = await provider.connection.getTokenAccountBalance(
+      tokenAccount
+    );
+    assert.equal(
+      tokenAccountInfo.value.uiAmount,
+      1,
+      "Token balance should be 1 after minting"
+    );
   });
 
   it("Fails to mint tokens when mint authority is revoked", async () => {
     // Generate keys for the mint and token account
     const mint = Keypair.generate();
-    const tokenAccount = await getAssociatedTokenAddress(mint.publicKey, user.publicKey);
+    const tokenAccount = await getAssociatedTokenAddress(
+      mint.publicKey,
+      user.publicKey
+    );
     const [metadataPDA] = PublicKey.findProgramAddressSync(
       [
         Buffer.from("metadata"),
@@ -354,7 +386,7 @@ describe("launch_token", () => {
       ],
       new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s")
     );
-  
+
     // Launch a token with revoked mint authority
     const launchArgs = {
       name: "Locked Token",
@@ -366,7 +398,7 @@ describe("launch_token", () => {
       makeMetadataMutable: false,
       initialMintAmount: new anchor.BN(0),
     };
-  
+
     await program.methods
       .launchToken(launchArgs)
       .accountsPartial({
@@ -377,7 +409,7 @@ describe("launch_token", () => {
       })
       .signers([user, mint])
       .rpc();
-  
+
     // Attempt to mint tokens and expect failure
     try {
       await program.methods
@@ -391,7 +423,8 @@ describe("launch_token", () => {
       assert.fail("Should have failed to mint tokens due to revoked authority");
     } catch (error) {
       assert.ok(
-        error.message.includes("Invalid authority") || error.message.includes("MintAuthorityRevoked"),
+        error.message.includes("Invalid authority") ||
+          error.message.includes("MintAuthorityRevoked"),
         "Expected an error related to revoked mint authority"
       );
     }
