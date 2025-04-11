@@ -4,13 +4,14 @@ pub mod instructions;
 pub mod state;
 
 use anchor_lang::prelude::*;
-use instructions::{initialize::*, launch::*, update_fee::*, mint_tokens::*};
+use instructions::{
+    initialize::*, launch::*, mint_tokens::*, revoke_freeze::*, revoke_mint::*, update_fee::*,
+};
 
 declare_id!("AGYkNasGKotZV1A5LkvxeK7mCkMQWdCjkRo4Qi64Jcct");
 
 #[program]
 pub mod launch_token {
-
     use super::*;
 
     pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
@@ -30,6 +31,16 @@ pub mod launch_token {
 
     pub fn mint_tokens(ctx: Context<MintTokens>, amount: u64) -> Result<()> {
         mint_tokens_handler(ctx, amount)?;
+        Ok(())
+    }
+
+    pub fn revoke_mint(ctx: Context<RevokeMint>) -> Result<()> {
+        revoke_mint_handler(ctx)?;
+        Ok(())
+    }
+
+    pub fn revoke_freeze(ctx: Context<RevokeFreeze>) -> Result<()> {
+        revoke_freeze_handler(ctx)?;
         Ok(())
     }
 }

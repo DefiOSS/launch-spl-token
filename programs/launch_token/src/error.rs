@@ -20,4 +20,6 @@ pub enum LaunchTokenError {
     InvalidFeeAccount,
     #[msg("Mint authority revoked")]
     MintAuthorityRevoked,
+    #[msg("Freeze authority already revoked")]
+    FreezeAlreadyRevoked,
 }
