@@ -429,4 +429,308 @@ describe("launch_token", () => {
       );
     }
   });
+
+  it("Revokes mint authority successfully", async () => {
+    const mint = Keypair.generate();
+
+    // Launch token with mint authority intact
+    await program.methods
+      .launchToken({
+        name: "Test Token",
+        symbol: "TEST",
+        uri: "https://example.com/metadata.json",
+        decimals: 6,
+        revokeMintAuthority: false,
+        revokeFreezeAuthority: false,
+        makeMetadataMutable: true,
+        initialMintAmount: new anchor.BN(0),
+      })
+      .accounts({
+        user: user.publicKey,
+        mint: mint.publicKey,
+        feeAccount,
+      })
+      .signers([user, mint])
+      .rpc();
+
+    // Verify initial mint authority
+    let mintInfo = await getMint(provider.connection, mint.publicKey);
+    assert.equal(
+      mintInfo.mintAuthority.toBase58(),
+      user.publicKey.toBase58(),
+      "Mint authority should be the user"
+    );
+
+    // Revoke mint authority
+    await program.methods
+      .revokeMint()
+      .accounts({
+        user: user.publicKey,
+        mint: mint.publicKey,
+      })
+      .signers([user])
+      .rpc();
+
+    // Verify mint authority is revoked
+    mintInfo = await getMint(provider.connection, mint.publicKey);
+    assert.isNull(mintInfo.mintAuthority, "Mint authority should be revoked");
+
+    // Attempt to mint tokens and expect failure
+    try {
+      await program.methods
+        .mintTokens(new anchor.BN(1000000))
+        .accounts({
+          user: user.publicKey,
+          mint: mint.publicKey,
+        })
+        .signers([user])
+        .rpc();
+      assert.fail(
+        "Should have failed to mint tokens after revoking mint authority"
+      );
+    } catch (error) {
+      assert.ok(
+        error.message.includes("IllegalOwner") ||
+          error.message.includes("MintAuthorityRevoked"),
+        "Expected an error due to revoked mint authority"
+      );
+    }
+  });
+
+  it("Fails to revoke mint authority as unauthorized user", async () => {
+    const mint = Keypair.generate();
+
+    // Launch token with mint authority intact
+    await program.methods
+      .launchToken({
+        name: "Test Token",
+        symbol: "TEST",
+        uri: "https://example.com/metadata.json",
+        decimals: 6,
+        revokeMintAuthority: false,
+        revokeFreezeAuthority: false,
+        makeMetadataMutable: true,
+        initialMintAmount: new anchor.BN(0),
+      })
+      .accounts({
+        user: user.publicKey,
+        mint: mint.publicKey,
+        feeAccount,
+      })
+      .signers([user, mint])
+      .rpc();
+
+    // Create an unauthorized user
+    const anotherUser = Keypair.generate();
+    await airdrop(anotherUser.publicKey);
+
+    // Attempt to revoke mint authority as unauthorized user
+    try {
+      await program.methods
+        .revokeMint()
+        .accounts({
+          user: anotherUser.publicKey,
+          mint: mint.publicKey,
+        })
+        .signers([anotherUser])
+        .rpc();
+      assert.fail(
+        "Should have failed to revoke mint authority as unauthorized user"
+      );
+    } catch (error) {
+      assert.ok(
+        error.message.includes("IllegalOwner") ||
+          error.message.includes("ConstraintMintMintAuthority"),
+        "Expected an error due to unauthorized user"
+      );
+    }
+  });
+
+  it("Fails to revoke mint authority when already revoked", async () => {
+    const mint = Keypair.generate();
+
+    // Launch token with mint authority revoked
+    await program.methods
+      .launchToken({
+        name: "Test Token",
+        symbol: "TEST",
+        uri: "https://example.com/metadata.json",
+        decimals: 6,
+        revokeMintAuthority: true,
+        revokeFreezeAuthority: false,
+        makeMetadataMutable: true,
+        initialMintAmount: new anchor.BN(0),
+      })
+      .accounts({
+        user: user.publicKey,
+        mint: mint.publicKey,
+        feeAccount,
+      })
+      .signers([user, mint])
+      .rpc();
+
+    // Attempt to revoke mint authority again
+    try {
+      await program.methods
+        .revokeMint()
+        .accounts({
+          user: user.publicKey,
+          mint: mint.publicKey,
+        })
+        .signers([user])
+        .rpc();
+      assert.fail(
+        "Should have failed to revoke already revoked mint authority"
+      );
+    } catch (error) {
+      assert.ok(
+        error.message.includes("IllegalOwner") ||
+          error.message.includes("ConstraintMintMintAuthority"),
+        "Expected an error since mint authority is already revoked"
+      );
+    }
+  });
+
+  it("Revokes freeze authority successfully", async () => {
+    const mint = Keypair.generate();
+
+    // Launch token with freeze authority intact
+    await program.methods
+      .launchToken({
+        name: "Test Token",
+        symbol: "TEST",
+        uri: "https://example.com/metadata.json",
+        decimals: 6,
+        revokeMintAuthority: false,
+        revokeFreezeAuthority: false,
+        makeMetadataMutable: true,
+        initialMintAmount: new anchor.BN(0),
+      })
+      .accounts({
+        user: user.publicKey,
+        mint: mint.publicKey,
+        feeAccount,
+      })
+      .signers([user, mint])
+      .rpc();
+
+    // Verify initial freeze authority
+    let mintInfo = await getMint(provider.connection, mint.publicKey);
+    assert.equal(
+      mintInfo.freezeAuthority.toBase58(),
+      user.publicKey.toBase58(),
+      "Freeze authority should be the user"
+    );
+
+    // Revoke freeze authority
+    await program.methods
+      .revokeFreeze()
+      .accounts({
+        user: user.publicKey,
+        mint: mint.publicKey,
+      })
+      .signers([user])
+      .rpc();
+
+    // Verify freeze authority is revoked
+    mintInfo = await getMint(provider.connection, mint.publicKey);
+    assert.isNull(
+      mintInfo.freezeAuthority,
+      "Freeze authority should be revoked"
+    );
+  });
+
+  it("Fails to revoke freeze authority as unauthorized user", async () => {
+    const mint = Keypair.generate();
+
+    // Launch token with freeze authority intact
+    await program.methods
+      .launchToken({
+        name: "Test Token",
+        symbol: "TEST",
+        uri: "https://example.com/metadata.json",
+        decimals: 6,
+        revokeMintAuthority: false,
+        revokeFreezeAuthority: false,
+        makeMetadataMutable: true,
+        initialMintAmount: new anchor.BN(0),
+      })
+      .accounts({
+        user: user.publicKey,
+        mint: mint.publicKey,
+        feeAccount,
+      })
+      .signers([user, mint])
+      .rpc();
+
+    // Create an unauthorized user
+    const anotherUser = Keypair.generate();
+    await airdrop(anotherUser.publicKey);
+
+    // Attempt to revoke freeze authority as unauthorized user
+    try {
+      await program.methods
+        .revokeFreeze()
+        .accounts({
+          user: anotherUser.publicKey,
+          mint: mint.publicKey,
+        })
+        .signers([anotherUser])
+        .rpc();
+      assert.fail(
+        "Should have failed to revoke freeze authority as unauthorized user"
+      );
+    } catch (error) {
+      assert.ok(
+        error.message.includes("IllegalOwner") ||
+          error.message.includes("ConstraintMintMintAuthority"),
+        "Expected an error due to unauthorized user"
+      );
+    }
+  });
+
+  it("Fails to revoke freeze authority when already revoked", async () => {
+    const mint = Keypair.generate();
+
+    // Launch token with freeze authority revoked
+    await program.methods
+      .launchToken({
+        name: "Test Token",
+        symbol: "TEST",
+        uri: "https://example.com/metadata.json",
+        decimals: 6,
+        revokeMintAuthority: false,
+        revokeFreezeAuthority: true,
+        makeMetadataMutable: true,
+        initialMintAmount: new anchor.BN(0),
+      })
+      .accounts({
+        user: user.publicKey,
+        mint: mint.publicKey,
+        feeAccount,
+      })
+      .signers([user, mint])
+      .rpc();
+
+    // Attempt to revoke freeze authority again
+    try {
+      await program.methods
+        .revokeFreeze()
+        .accounts({
+          user: user.publicKey,
+          mint: mint.publicKey,
+        })
+        .signers([user])
+        .rpc();
+      assert.fail(
+        "Should have failed to revoke already revoked freeze authority"
+      );
+    } catch (error) {
+      assert.ok(
+        error.message.includes("IllegalOwner") ||
+          error.message.includes("ConstraintMintFreezeAuthority"),
+        "Expected an error since freeze authority is already revoked"
+      );
+    }
+  });
 });
