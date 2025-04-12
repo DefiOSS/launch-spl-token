@@ -1,10 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::{
     associated_token::AssociatedToken,
-    token::{
-        set_authority, spl_token::instruction::AuthorityType, Mint, SetAuthority, Token,
-        TokenAccount,
-    },
+    token::{set_authority, spl_token::instruction::AuthorityType, Mint, SetAuthority, Token},
 };
 
 use crate::error::LaunchTokenError;
@@ -13,12 +10,12 @@ use crate::error::LaunchTokenError;
 pub struct RevokeMint<'info> {
     #[account(mut)]
     pub user: Signer<'info>,
-    #[account(
+    #[account( 
+        mut,
         mint::authority = user,
         mint::freeze_authority = user
     )]
     pub mint: Account<'info, Mint>,
-    pub token_account: Account<'info, TokenAccount>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
